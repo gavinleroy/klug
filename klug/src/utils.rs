@@ -1,3 +1,23 @@
+pub(crate) fn tag<'a, 'b>(t: &'a str, s: &'b str) -> &'b str {
+    if s.starts_with(t) {
+        &s[t.len()..]
+    } else {
+        panic!("expected {}", t)
+    }
+}
+
+pub(crate) fn extract_ident(s: &str) -> (&str, &str) { 
+    let okay = s.chars()
+        .next()
+        .map(|c| c.is_ascii_alphabetic())
+        .unwrap_or(false);
+    if okay {
+        take_while(|c| c.is_ascii_alphanumeric(), s)
+    } else {
+        ("", s)
+    }
+}
+
 pub(crate) fn take_while(acc: impl Fn(char) -> bool, s: &str) -> (&str, &str) {
     let end = s 
         .char_indices() 
@@ -50,5 +70,17 @@ mod tests {
     #[test]
     fn extract_slash() {
         assert_eq!(extract_op("/4"), ("/", "4"));
+    }
+    #[test]
+    fn extract_alphabetic_ident() {
+        assert_eq!(extract_ident("abcdEFG stop"), ("abcdEFG", " stop"));
+    }
+    #[test]
+    fn extract_alphanumeric_ident() {
+        assert_eq!(extract_ident("foobar1()"), ("foobar1", "()"));
+    }
+    #[test]
+    fn cannot_extract_ident_beginning_with_number() {
+        assert_eq!(extract_ident("123abc"), ("", "123abc"));
     }
 }
