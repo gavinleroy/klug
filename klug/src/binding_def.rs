@@ -4,8 +4,8 @@ use crate::env::Env;
 
 #[derive(Debug, PartialEq)]
 pub struct BindingDef {
-    name: String,
-    val: Expr,
+    pub name: String,
+    pub val: Expr,
 }
 
 impl BindingDef {
@@ -29,8 +29,9 @@ impl BindingDef {
 
         Ok((s, Self { name: name.to_string(), val, } ))
     }
-    pub(crate) fn eval(&self, env: &mut Env) {
-        env.extend_env(self.name.clone(), self.val.eval());
+    pub(crate) fn eval(&self, env: &mut Env) -> Result<(), String> {
+        env.extend_env(self.name.clone(), self.val.eval(env)?);
+        Ok(())
     }
 }
 

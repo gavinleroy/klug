@@ -1,16 +1,33 @@
+pub mod use_bind;
+pub mod block;
+
+use crate::env::Env;
 use crate::utils;
 use crate::value::Value;
+use crate::stmt::Stmt;
+use use_bind::BindingUsage;
+use block::Block;
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
     Number(Number),
     Operation { lhs: Number, rhs: Number, op: Op },
+    BindingUsage(BindingUsage),
+    Block(Block),
 }
 
 impl Expr {
     pub fn new(s: &str) -> Result<(&str, Self), String> {
         Self::new_op(s)
             .or_else(|_| Self::new_num(s))
+            .or_else(|_| { 
+                BindingUsage::new(s)
+                .map(|(s, binduse)| (s, Self::BindingUsage(binduse)))
+            })
+            .or_else(|_| {
+                Block::new(s)
+                    .map(|(s, blck)| (s, Self::Block(blck)))
+            })
     }
 
     pub fn new_op(s: &str) -> Result<(&str, Self), String> {
@@ -30,10 +47,10 @@ impl Expr {
             .map(|(s, num)| (s, Self::Number(num)))
     }
 
-    pub(crate) fn eval(&self) -> Value {
+    pub(crate) fn eval(&self, env: &Env) -> Result<Value, String> {
         match self {
-            Expr::Number(Number(n)) => Value::Number(*n),
-            Expr::Operation { lhs, rhs, op } => {
+            Self::Number(Number(n)) => Ok(Value::Number(*n)),
+            Self::Operation { lhs, rhs, op } => {
                 let Number(lhs) = lhs;
                 let Number(rhs) = rhs;
                 let res = match op {
@@ -42,8 +59,10 @@ impl Expr {
                     Op::Mult => lhs * rhs,
                     Op::Div => lhs / rhs,
                 };
-                Value::Number(res)
+                Ok(Value::Number(res))
             },
+            Self::BindingUsage(binduse) => binduse.eval(&env),
+            Self::Block(block) => block.eval(&env),
         }
     }
 }
@@ -128,8 +147,8 @@ mod tests {
                 rhs: Number(10),
                 op: Op::Plus,
             }
-            .eval(),
-            Value::Number(20),
+            .eval(&Env::default()),
+            Ok(Value::Number(20)),
         );
     }
     #[test]
@@ -140,8 +159,8 @@ mod tests {
                 rhs: Number(5),
                 op: Op::Sub,
             }
-            .eval(),
-            Value::Number(-4),
+            .eval(&Env::default()),
+            Ok(Value::Number(-4)),
         );
     }
     #[test]
@@ -152,8 +171,8 @@ mod tests {
                 rhs: Number(6),
                 op: Op::Mult,
             }
-            .eval(),
-            Value::Number(30),
+            .eval(&Env::default()),
+            Ok(Value::Number(30)),
         );
     }
     #[test]
@@ -164,12 +183,60 @@ mod tests {
                 rhs: Number(20),
                 op: Op::Div,
             }
-            .eval(),
-            Value::Number(10),
+            .eval(&Env::default()),
+            Ok(Value::Number(10)),
         );
     }
     #[test]
     fn parse_number_as_expr() {
         assert_eq!(Expr::new("456"), Ok(("", Expr::Number(Number(456)))));
+    }
+    #[test]
+    fn parse_binding_usage() {
+        assert_eq!(
+            Expr::new("bar"),
+            Ok((
+                "",
+                Expr::BindingUsage(BindingUsage {
+                    name: "bar".to_string(),
+                }),
+            )),
+        );
+    }
+
+    #[test]
+    fn parse_block() {
+        assert_eq!(
+            Expr::new("{ 200 }"),
+            Ok((
+                "",
+                Expr::Block(Block {
+                    stmts: vec![Stmt::Expr(Expr::Number(Number(200)))],
+                }),
+            )),
+        );
+    }
+    #[test]
+    fn eval_binding_usage() {
+        let mut env = Env::default();
+        env.extend_env("ten".to_string(), Value::Number(10));
+
+        assert_eq!(
+            Expr::BindingUsage(BindingUsage {
+                name: "ten".to_string(),
+            })
+            .eval(&env),
+            Ok(Value::Number(10)),
+        );
+    }
+    #[test]
+    fn eval_block() {
+        assert_eq!(
+            Expr::Block(Block {
+                stmts: vec![Stmt::Expr(Expr::Number(Number(10)))],
+            })
+            .eval(&Env::default()),
+            Ok(Value::Number(10)),
+        );
     }
 }
