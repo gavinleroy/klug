@@ -25,10 +25,10 @@ fn main() -> io::Result<()> {
 
 fn run(s: &str, env: &mut klug::Env) -> Result<Option<klug::Value>, String> {
     let parse = klug::parse(s)
-        .map_err(|msg| format!("ERR: {}", msg))?;
+        .map_err(|msg| format!("ERR! {}", msg))?;
     let ev = parse
         .eval(env)
-        .map_err(|msg| format!("ERR: {}", msg))?;
+        .map_err(|msg| format!("ERR! {}", msg))?;
 
     if ev == klug::Value::Unit {
         Ok(None)
