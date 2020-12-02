@@ -2,7 +2,7 @@ use crate::utils;
 use crate::value::Value;
 use crate::env::Env;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub(crate) struct BindingUsage {
     pub(crate) name: String,
 }
@@ -14,7 +14,7 @@ impl BindingUsage {
         Ok((s, Self { name: name.to_string() } ))
     }
     pub(super) fn eval(&self, env: &Env) -> Result<Value, String> {
-        env.lookup(&self.name)
+        env.get_binding(&self.name)
     }
 }
 

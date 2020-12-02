@@ -4,7 +4,7 @@ use crate::value::Value;
 use crate::env::Env;
 use crate::func_def::FuncDef;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub(crate) enum Stmt {
     BindingDef(BindingDef),
     FuncDef(FuncDef),
@@ -25,7 +25,10 @@ impl Stmt {
                 Ok(Value::Unit)
             }
             Self::Expr(expr) => expr.eval(env),
-            Self::FuncDef(_) => todo!(),
+            Self::FuncDef(fd) => {
+                fd.eval(env)?; 
+                Ok(Value::Unit)
+            }
         }
     }
 }
@@ -72,11 +75,23 @@ mod tests {
             Ok((
                 "",
                 Stmt::Expr(Expr::Operation {
-                    lhs: Number(1),
-                    rhs: Number(1),
+                    lhs: Box::new(Expr::Number(Number(1))),
+                    rhs: Box::new(Expr::Number(Number(1))),
                     op: Op::Plus,
                 }),
             )),
+        );
+    }
+    #[test]
+    fn eval_func_def() {
+        assert_eq!(
+            Stmt::FuncDef(FuncDef {
+                name: "always_return_one".to_string(),
+                params: Vec::new(),
+                body: Box::new(Stmt::Expr(Expr::Number(Number(1)))),
+            })
+            .eval(&mut Env::default()),
+            Ok(Value::Unit),
         );
     }
 }
