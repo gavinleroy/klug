@@ -5,7 +5,7 @@ use crate::env::Env;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Block {
-    pub(super) stmts: Vec<Stmt>,
+    pub(crate) stmts: Vec<Stmt>,
 }
 
 impl Block {
@@ -13,16 +13,7 @@ impl Block {
         let s = utils::tag("{", s)?;
         let (_, s) = utils::extract_whitespace(s);
 
-        let mut s = s;
-        let mut stmts = Vec::new();
-
-        while let Ok((ns, stmt)) = Stmt::new(s) {
-            s = ns;
-            stmts.push(stmt);
-            
-            let (_, ns) = utils::extract_whitespace(s);
-            s = ns;
-        }
+        let (s, stmts) = utils::sequence(Stmt::new, s)?;
 
         let (_, s) = utils::extract_whitespace(s);
         let s = utils::tag("}", s)?;

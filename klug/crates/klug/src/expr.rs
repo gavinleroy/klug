@@ -1,12 +1,12 @@
 pub mod use_bind;
 pub mod block;
 
+pub(crate) use use_bind::BindingUsage;
+pub(crate) use block::Block;
+
 use crate::value::Value;
 use crate::env::Env;
 use crate::utils;
-
-use use_bind::BindingUsage;
-use block::Block;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum Expr {

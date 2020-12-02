@@ -4,6 +4,7 @@ mod expr;
 mod stmt;
 mod utils;
 mod value;
+mod func_def;
 
 pub use env::Env;
 pub use value::Value;
@@ -23,7 +24,6 @@ pub fn parse(s: &str) -> Result<Parse, String> {
     if s.is_empty() {
         Ok(Parse(stmt))
     } else {
-        dbg!(s);
-        Err("input was not consumed fully by parser".to_string())
+        Err(format!("input: '{}' not consumed by parser", s))
     }
 }
