@@ -13,7 +13,7 @@ impl Block {
         let s = utils::tag("{", s)?;
         let (_, s) = utils::extract_whitespace(s);
 
-        let (s, stmts) = utils::sequence(Stmt::new, s)?;
+        let (s, stmts) = utils::sequence(Stmt::new, utils::extract_whitespace, s)?;
 
         let (_, s) = utils::extract_whitespace(s);
         let s = utils::tag("}", s)?;
@@ -62,37 +62,6 @@ mod tests {
             )),
         );
     }
-       #[test]
-    fn parse_block_with_multiple_stmts() {
-        assert_eq!(
-            Block::new(
-                "{ let a = 10 
-                    let b = a 
-                    b 
-                }",
-            ),
-            Ok((
-                "",
-                Block {
-                    stmts: vec![
-                        Stmt::BindingDef(BindingDef {
-                            name: "a".to_string(),
-                            val: Expr::Number(Number(10)),
-                        }),
-                        Stmt::BindingDef(BindingDef {
-                            name: "b".to_string(),
-                            val: Expr::BindingUsage(BindingUsage {
-                                name: "a".to_string(),
-                            }),
-                        }),
-                        Stmt::Expr(Expr::BindingUsage(BindingUsage {
-                            name: "b".to_string(),
-                        })),
-                    ],
-                },
-            )),
-        );
-    } 
     #[test]
     fn eval_empty_block() {
         assert_eq!(
@@ -139,6 +108,38 @@ mod tests {
             }
             .eval(&Env::default()),
             Ok(Value::Number(3)),
+        );
+    }
+    #[test]
+    fn parse_block_with_multiple_stmts() {
+        assert_eq!(
+            Block::new(
+                "{
+                    let a = 10
+                    let b = a
+                    b
+                 }",
+            ),
+            Ok((
+                "",
+                Block {
+                    stmts: vec![
+                        Stmt::BindingDef(BindingDef {
+                            name: "a".to_string(),
+                            val: Expr::Number(Number(10)),
+                        }),
+                        Stmt::BindingDef(BindingDef {
+                            name: "b".to_string(),
+                            val: Expr::BindingUsage(BindingUsage {
+                                name: "a".to_string(),
+                            }),
+                        }),
+                        Stmt::Expr(Expr::BindingUsage(BindingUsage {
+                            name: "b".to_string(),
+                        })),
+                    ],
+                },
+            )),
         );
     }
 }

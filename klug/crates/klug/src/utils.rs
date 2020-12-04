@@ -1,8 +1,9 @@
 const WHITESPACE: &[char] = &[' ', '\n'];
 
-pub(crate) fn sequence<T: std::fmt::Debug>(
-    parser: impl Fn(&str) -> Result<(&str, T), String>,
-    mut s: &str,
+pub(crate) fn sequence<T>(
+        parser: impl Fn(&str) -> Result<(&str, T), String>,
+        separator_parser: impl Fn(&str) -> (&str, &str),
+        mut s: &str,
     ) -> Result<(&str, Vec<T>), String> {
 
     let mut items = Vec::new();
@@ -10,10 +11,25 @@ pub(crate) fn sequence<T: std::fmt::Debug>(
 
         s = new_s;
         items.push(item);
-        let (_, new_s) = extract_whitespace(s);
+        let (_, new_s) = separator_parser(s);
         s = new_s;
     }
     Ok((s, items))
+}
+
+pub(crate) fn sequence1<T>(
+        parser: impl Fn(&str) -> Result<(&str, T), String>,
+        separator_parser: impl Fn(&str) -> (&str, &str),
+        s: &str,
+    ) -> Result<(&str, Vec<T>), String> {
+
+    let (s, sequence) = sequence(parser, separator_parser, s)?;
+
+    if sequence.is_empty() {
+        Err("expected a sequence with more than one item".to_string())
+    } else {
+        Ok((s, sequence))
+    }
 }
 
 pub(crate) fn tag<'a, 'b>(t: &'a str, s: &'b str) -> Result<&'b str, String> {
@@ -38,7 +54,7 @@ pub(crate) fn extract_ident(s: &str) -> Result<(&str, &str), String> {
     }
 }
 
-fn take_while(acc: impl Fn(char) -> bool, s: &str) -> (&str, &str) {
+pub(crate) fn take_while(acc: impl Fn(char) -> bool, s: &str) -> (&str, &str) {
     let end = s 
         .char_indices() 
         .find_map(|(idx, c)| if acc(c) { None } else { Some(idx) }) 
