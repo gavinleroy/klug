@@ -1,278 +1,134 @@
-pub mod use_bind;
-mod block;
-mod app;
+use super::Parser;
+use crate::lexer::SyntaxKind;
 
-pub(crate) use use_bind::BindingUsage;
-pub(crate) use block::Block;
-pub(crate) use app::FuncCall;
-
-use crate::value::Value;
-use crate::env::Env;
-use crate::utils;
-
-#[derive(Debug, PartialEq, Clone)]
-pub(crate) enum Expr {
-    Number(Number),
-    Operation { lhs: Box<Self>, rhs: Box<Self>, op: Op },
-    BindingUsage(BindingUsage),
-    Block(Block),
-    FuncCall(FuncCall),
+pub(super) fn expr(p: &mut Parser) {
+    expr_binding_power(p, 0);
 }
 
-impl Expr {
-    pub(crate) fn new(s: &str) -> Result<(&str, Self), String> {
-        Self::new_op(s).or_else(|_| Self::new_non_op(s))
+fn expr_binding_power(p: &mut Parser, min_bind: u8) {
+    let checkpoint = p.checkpoint();
+
+    match p.peek() {
+        Some(SyntaxKind::Number) | Some(SyntaxKind::Ident) => p.bump(),
+        _ => {}
     }
 
-    fn new_op(s: &str) -> Result<(&str, Self), String> {
-        let (s, lhs) = Self::new_non_op(s)?;
-        let (_, s) = utils::extract_whitespace(s);
+    loop {
+        let op = match p.peek() {
+            Some(SyntaxKind::Plus) => Op::Add,
+            Some(SyntaxKind::Minus) => Op::Sub,
+            Some(SyntaxKind::Star) => Op::Mul,
+            Some(SyntaxKind::Slash) => Op::Div,
+            _ => return, // we’ll handle errors later.
+        };
 
-        let (s, op) = Op::new(s)?;
-        let (_, s) = utils::extract_whitespace(s);
+        let (lbind, rbind) = op.binding_power();
 
-        let (s, rhs) = Self::new_non_op(s)?;
-
-        Ok((s, Self::Operation { 
-            lhs: Box::new(lhs), 
-            rhs: Box::new(rhs), 
-            op 
-        }))
-    }
-
-    fn new_non_op(s: &str) -> Result<(&str, Self), String> {
-        Number::new(s).map(|(s, num)| (s, Self::Number(num)))
-            .or_else(|_| { 
-                FuncCall::new(s)
-                .map(|(s, app)| (s, Self::FuncCall(app)))
-            })
-            .or_else(|_| { 
-                BindingUsage::new(s)
-                .map(|(s, binduse)| (s, Self::BindingUsage(binduse)))
-            })
-            .or_else(|_| {
-                Block::new(s)
-                    .map(|(s, blck)| (s, Self::Block(blck)))
-            })
-    }
-
-    pub(crate) fn eval(&self, env: &Env) -> Result<Value, String> {
-        match self {
-            Self::Number(Number(n)) => Ok(Value::Number(*n)),
-            Self::Operation { lhs, rhs, op } => {
-                let lhs = lhs.eval(env)?;
-                let rhs = rhs.eval(env)?;
-                let (lhs, rhs) = match (lhs, rhs) {
-                    (Value::Number(lhs), Value::Number(rhs)) => (lhs, rhs),
-                    _ => return Err("Valid operations only between two numbers".to_string()),
-                };
-                let res = match op {
-                    Op::Plus => lhs + rhs,
-                    Op::Sub => lhs - rhs,
-                    Op::Mult => lhs * rhs,
-                    Op::Div => lhs / rhs,
-                };
-                Ok(Value::Number(res))
-            },
-            Self::BindingUsage(binduse) => binduse.eval(&env),
-            Self::Block(block) => block.eval(&env),
-            Self::FuncCall(funcdef) => funcdef.eval(&env),
+        if lbind < min_bind {
+            return;
         }
+
+        // consume the operator token
+        p.bump();
+
+        // start a new binary operation node
+        p.start_node_at(checkpoint, SyntaxKind::BinOp);
+        // recurse for the next token
+        expr_binding_power(p, rbind);
+        // finisht the binop node
+        p.finish_node();
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub(crate) struct Number(pub(crate) i32);
-
-impl Number {
-    fn new(s: &str) -> Result<(&str, Self), String> {
-        let (num, s) = utils::extract_digits(s)?;
-        Ok((s, Self(num.parse().unwrap()))) 
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub(crate) enum Op {
-    Plus,
-    Mult,
+enum Op {
+    Add,
     Sub,
+    Mul,
     Div,
 }
 
 impl Op {
-    fn new(s: &str) -> Result<(&str, Self), String> {
-        utils::tag("+", s)
-            .map(|s| (s, Self::Plus))
-            .or_else(|_| utils::tag("-", s).map(|s| (s, Self::Sub)))
-            .or_else(|_| utils::tag("*", s).map(|s| (s, Self::Mult)))
-            .or_else(|_| utils::tag("/", s).map(|s| (s, Self::Div)))
+    fn binding_power(&self) -> (u8, u8) {
+        match self {
+            Self::Add | Self::Sub => (1, 2),
+            Self::Mul | Self::Div => (3, 4),
+        }
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::stmt::Stmt;
+    use super::super::check;
+    use expect_test::expect;
 
     #[test]
     fn parse_number() {
-        assert_eq!(Number::new("123"), Ok(("", Number(123))));
-    }
-    #[test]
-    fn parse_add() {
-        assert_eq!(Op::new("+"), Ok(("", Op::Plus)));
-    }
-    #[test]
-    fn parse_mult() {
-        assert_eq!(Op::new("*"), Ok(("", Op::Mult)));
-    }
-    #[test]
-    fn parse_sub() {
-        assert_eq!(Op::new("-"), Ok(("", Op::Sub)));
-    }
-    #[test]
-    fn parse_div() {
-        assert_eq!(Op::new("/"), Ok(("", Op::Div)));
-    }
-    #[test]
-    fn parse_expr1plus2() {
-        assert_eq!(Expr::new("1+2"), 
-                   Ok(("", Expr::Operation { 
-                       lhs: Box::new(Expr::Number(Number(1))), 
-                       rhs: Box::new(Expr::Number(Number(2))), 
-                       op: Op::Plus, 
-                   })));
-    }
-    #[test]
-    fn parse_expr_with_whitespace() {
-        assert_eq!(
-            Expr::new("2 * 2"),
-            Ok((
-                "",
-                Expr::Operation {
-                    lhs: Box::new(Expr::Number(Number(2))),
-                    rhs: Box::new(Expr::Number(Number(2))),
-                    op: Op::Mult,
-                },
-            )),
+        check(
+            "123",
+            expect![[r#"
+Root@0..3
+  Number@0..3 "123""#]],
         );
     }
-    #[test]
-    fn eval_add() {
-        assert_eq!(
-            Expr::Operation {
-                lhs: Box::new(Expr::Number(Number(10))),
-                rhs: Box::new(Expr::Number(Number(10))),
-                op: Op::Plus,
-            }
-            .eval(&Env::default()),
-            Ok(Value::Number(20)),
-        );
-    }
-    #[test]
-    fn eval_sub() {
-        assert_eq!(
-            Expr::Operation {
-                lhs: Box::new(Expr::Number(Number(1))),
-                rhs: Box::new(Expr::Number(Number(5))),
-                op: Op::Sub,
-            }
-            .eval(&Env::default()),
-            Ok(Value::Number(-4)),
-        );
-    }
-    #[test]
-    fn eval_mul() {
-        assert_eq!(
-            Expr::Operation {
-                lhs: Box::new(Expr::Number(Number(5))),
-                rhs: Box::new(Expr::Number(Number(6))),
-                op: Op::Mult,
-            }
-            .eval(&Env::default()),
-            Ok(Value::Number(30)),
-        );
-    }
-    #[test]
-    fn eval_div() {
-        assert_eq!(
-            Expr::Operation {
-                lhs: Box::new(Expr::Number(Number(200))),
-                rhs: Box::new(Expr::Number(Number(20))),
-                op: Op::Div,
-            }
-            .eval(&Env::default()),
-            Ok(Value::Number(10)),
-        );
-    }
-    #[test]
-    fn parse_number_as_expr() {
-        assert_eq!(Expr::new("456"), Ok(("", Expr::Number(Number(456)))));
-    }
+
     #[test]
     fn parse_binding_usage() {
-        assert_eq!(
-            Expr::new("bar"),
-            Ok((
-                "",
-                Expr::BindingUsage(BindingUsage {
-                    name: "bar".to_string(),
-                }),
-            )),
+        check(
+            "counter",
+            expect![[r#"
+Root@0..7
+  Ident@0..7 "counter""#]],
         );
     }
-    #[test]
-    fn eval_binding_usage() {
-        let mut env = Env::default();
-        env.extend_env("ten".to_string(), Value::Number(10));
 
-        assert_eq!(
-            Expr::BindingUsage(BindingUsage {
-                name: "ten".to_string(),
-            })
-            .eval(&env),
-            Ok(Value::Number(10)),
+    #[test]
+    fn parse_simple_binary_operation() {
+        check(
+            "1+2",
+            expect![[r#"
+Root@0..3
+  BinOp@0..3
+    Number@0..1 "1"
+    Plus@1..2 "+"
+    Number@2..3 "2""#]],
         );
     }
+
     #[test]
-    fn parse_func_call() {
-        assert_eq!(
-            Expr::new("add 1 2"),
-            Ok((
-                "",
-                Expr::FuncCall(FuncCall {
-                    callee: "add".to_string(),
-                    params: vec![Expr::Number(Number(1)), Expr::Number(Number(2))],
-                }),
-            )),
+    fn parse_left_associative_binary_operation() {
+        check(
+            "1+2+3+4",
+            expect![[r#"
+Root@0..7
+  BinOp@0..7
+    BinOp@0..5
+      BinOp@0..3
+        Number@0..1 "1"
+        Plus@1..2 "+"
+        Number@2..3 "2"
+      Plus@3..4 "+"
+      Number@4..5 "3"
+    Plus@5..6 "+"
+    Number@6..7 "4""#]],
         );
     }
+
     #[test]
-    fn eval_func_call() {
-        let mut env = Env::default();
-
-        env.extend_env_func(
-            "add".to_string(),
-            vec!["x".to_string(), "y".to_string()],
-            Stmt::Expr(Expr::Operation {
-                lhs: Box::new(Expr::BindingUsage(BindingUsage {
-                    name: "x".to_string(),
-                })),
-                rhs: Box::new(Expr::BindingUsage(BindingUsage {
-                    name: "y".to_string(),
-                })),
-                op: Op::Plus,
-            }),
-        );
-
-        assert_eq!(
-            Expr::FuncCall(FuncCall {
-                callee: "add".to_string(),
-                params: vec![Expr::Number(Number(2)), Expr::Number(Number(2))],
-            })
-            .eval(&env),
-            Ok(Value::Number(4)),
+    fn parse_binary_operation_with_mixed_binding_power() {
+        check(
+            "1+2*3-4",
+            expect![[r#"
+Root@0..7
+  BinOp@0..7
+    BinOp@0..5
+      Number@0..1 "1"
+      Plus@1..2 "+"
+      BinOp@2..5
+        Number@2..3 "2"
+        Star@3..4 "*"
+        Number@4..5 "3"
+    Minus@5..6 "-"
+    Number@6..7 "4""#]],
         );
     }
 }
