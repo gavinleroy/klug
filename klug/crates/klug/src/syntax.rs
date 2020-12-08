@@ -1,14 +1,14 @@
 use crate::lexer::SyntaxKind;
-use num_traits::{FromPrimitive, ToPrimitive};
+//use num_traits::{FromPrimitive, ToPrimitive};
+
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub(crate) enum KlugLanguage {}
 
 //pub(crate) type SyntaxNode = rowan::SyntaxNode<KlugLanguage>;
 //#[allow(unused)]
 //pub(crate) type SyntaxToken = rowan::SyntaxToken<KlugLanguage>;
 //#[allow(unused)]
 //pub(crate) type SyntaxElement = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
-
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub(crate) enum KlugLanguage {}
 
 //impl rowan::Language for KlugLanguage {
 //    type Kind = SyntaxKind;

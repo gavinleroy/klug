@@ -1,7 +1,6 @@
 pub mod parser;
 mod lexer;
 mod syntax;
-mod literal;
 
 #[cfg(test)]
 mod tests {

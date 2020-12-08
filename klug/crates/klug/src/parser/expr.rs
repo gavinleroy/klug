@@ -1,6 +1,10 @@
+mod literal;
+mod op;
+
+use literal::Literal;
+use op::{InfixOp, PrefixOp};
 use super::Parser;
 use crate::lexer::SyntaxKind;
-use crate::literal::{Literal, new_literal};
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum Expr{
@@ -17,7 +21,6 @@ impl Expr {
 }
 
 fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
-//    let checkpoint = p.checkpoint();
 
     let mut poss_expr: Expr;
 
@@ -26,11 +29,9 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
     match p.peek() {
         Some(SyntaxKind::Number) 
         | Some(SyntaxKind::Ident) => {
-            // start of an binary expr
-            poss_expr = Expr::Literal(new_literal(p.get()));
+            poss_expr = Expr::Literal(Literal::new(p.next())); // NOTE: get consumes the char
         }
         Some(SyntaxKind::Minus) => {
-            // start of a unary -
             p.consume();
             let op = PrefixOp::Neg;
             let ((), rbind) = op.binding_power();
@@ -38,14 +39,13 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
             poss_expr =  Expr::Unary(op, Box::new(new_expr));
         }
         Some(SyntaxKind::LParen) => {
-            // start of a grouping
             p.consume();
             let new_expr = expr_binding_power(p, 0);
             assert_eq!(p.peek(), Some(SyntaxKind::RParen));
             p.consume(); // consume the paren
             poss_expr =  Expr::Grouping(Box::new(new_expr));
         }
-        _ => todo!(),
+        _ => todo!(), // TODO handle errors
     }
 
     p.consume_whitespace();
@@ -56,7 +56,7 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
             Some(SyntaxKind::Minus) => InfixOp::Sub,
             Some(SyntaxKind::Star) => InfixOp::Mul,
             Some(SyntaxKind::Slash) => InfixOp::Div,
-            _ => return poss_expr, // I’ll handle errors later.
+            _ => return poss_expr, // If it's not an op, we're done with the expr
         };
 
         let (lbind, rbind) = op.binding_power();
@@ -72,41 +72,44 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum InfixOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-}
-
-impl InfixOp {
-    fn binding_power(&self) -> (u8, u8) {
-        match self {
-            Self::Add | Self::Sub => (1, 2),
-            Self::Mul | Self::Div => (3, 4),
-        }
-    }
-}
-
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum PrefixOp {
-    Neg,
-}
-
-impl PrefixOp {
-    fn binding_power(&self) -> ((), u8) {
-        match self {
-            Self::Neg => ((), 5),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::super::check;
     use super::*;
+    use super::super::check;
+
+    #[test]
+    fn parse_num() {
+        check("5", Expr::Literal(Literal::NUMBER(5.0)));
+    }
+
+    #[test]
+    fn parse_bool() {
+        check("false", Expr::Literal(Literal::FALSE));
+    }
+
+    #[test]
+    fn literal_string() {
+        let s = "var";
+        assert_eq!(Literal::new(s), Literal::STRING("var".to_string()));
+    }
+
+    #[test]
+    fn literal_num() {
+        let s = "5";
+        assert_eq!(Literal::new(s), Literal::NUMBER(5.0));
+    }
+
+    #[test]
+    fn literal_true() {
+        let s = "true";
+        assert_eq!(Literal::new(s), Literal::TRUE);
+    }
+
+    #[test]
+    fn literal_false() {
+        let s = "false";
+        assert_eq!(Literal::new(s), Literal::FALSE);
+    }
 
     #[test]
     fn simple_binary() {

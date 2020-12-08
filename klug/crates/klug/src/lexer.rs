@@ -13,6 +13,11 @@ pub(crate) enum SyntaxKind {
     Ident,
     #[regex("[0-9]+")]
     Number,
+    /*
+    * TODO:
+    *   Add additional tokens:  < > <= >= != ==
+    *   And binary ops:         & | 
+    */
     #[token("+")]
     Plus,
     #[token("-")]
@@ -31,9 +36,7 @@ pub(crate) enum SyntaxKind {
     LParen,
     #[token(")")]
     RParen,
-//    BinaryExpr,
-//    PrefixExpr,
-    Root,
+    Root, // TODO remove
     #[error]
     Error,
 }
