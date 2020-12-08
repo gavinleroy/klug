@@ -1,53 +1,86 @@
 use super::Parser;
 use crate::lexer::SyntaxKind;
+use crate::literal::{Literal, new_literal};
 
-pub(super) fn expr(p: &mut Parser) {
-    expr_binding_power(p, 0);
+#[derive(Debug, PartialEq)]
+pub(crate) enum Expr{
+  Unary(PrefixOp, Box<Expr>),
+  Binary(Box<Expr>, InfixOp, Box<Expr>),
+  Grouping(Box<Expr>),
+  Literal(Literal),
 }
 
-fn expr_binding_power(p: &mut Parser, min_bind: u8) {
-    let checkpoint = p.checkpoint();
+impl Expr {
+    pub(super) fn new(p: &mut Parser) -> Expr {
+        expr_binding_power(p, 0)
+    }
+}
+
+fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
+//    let checkpoint = p.checkpoint();
+
+    let mut poss_expr: Expr;
+
+    p.consume_whitespace();
 
     match p.peek() {
-        Some(SyntaxKind::Number) | Some(SyntaxKind::Ident) => p.bump(),
-        _ => {}
+        Some(SyntaxKind::Number) 
+        | Some(SyntaxKind::Ident) => {
+            // start of an binary expr
+            poss_expr = Expr::Literal(new_literal(p.get()));
+        }
+        Some(SyntaxKind::Minus) => {
+            // start of a unary -
+            p.consume();
+            let op = PrefixOp::Neg;
+            let ((), rbind) = op.binding_power();
+            let new_expr = expr_binding_power(p, rbind);
+            poss_expr =  Expr::Unary(op, Box::new(new_expr));
+        }
+        Some(SyntaxKind::LParen) => {
+            // start of a grouping
+            p.consume();
+            let new_expr = expr_binding_power(p, 0);
+            assert_eq!(p.peek(), Some(SyntaxKind::RParen));
+            p.consume(); // consume the paren
+            poss_expr =  Expr::Grouping(Box::new(new_expr));
+        }
+        _ => todo!(),
     }
+
+    p.consume_whitespace();
 
     loop {
         let op = match p.peek() {
-            Some(SyntaxKind::Plus) => Op::Add,
-            Some(SyntaxKind::Minus) => Op::Sub,
-            Some(SyntaxKind::Star) => Op::Mul,
-            Some(SyntaxKind::Slash) => Op::Div,
-            _ => return, // we’ll handle errors later.
+            Some(SyntaxKind::Plus) => InfixOp::Add,
+            Some(SyntaxKind::Minus) => InfixOp::Sub,
+            Some(SyntaxKind::Star) => InfixOp::Mul,
+            Some(SyntaxKind::Slash) => InfixOp::Div,
+            _ => return poss_expr, // I’ll handle errors later.
         };
 
         let (lbind, rbind) = op.binding_power();
 
+        // preceding expr takes precedence
         if lbind < min_bind {
-            return;
+            return poss_expr;
         }
 
-        // consume the operator token
-        p.bump();
-
-        // start a new binary operation node
-        p.start_node_at(checkpoint, SyntaxKind::BinOp);
-        // recurse for the next token
-        expr_binding_power(p, rbind);
-        // finisht the binop node
-        p.finish_node();
+        p.consume(); // consume the operator token
+        let rhs = expr_binding_power(p, rbind);
+        poss_expr = Expr::Binary(Box::new(poss_expr), op, Box::new(rhs));
     }
 }
 
-enum Op {
+#[derive(Debug, PartialEq)]
+pub(crate) enum InfixOp {
     Add,
     Sub,
     Mul,
     Div,
 }
 
-impl Op {
+impl InfixOp {
     fn binding_power(&self) -> (u8, u8) {
         match self {
             Self::Add | Self::Sub => (1, 2),
@@ -56,79 +89,83 @@ impl Op {
     }
 }
 
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum PrefixOp {
+    Neg,
+}
+
+impl PrefixOp {
+    fn binding_power(&self) -> ((), u8) {
+        match self {
+            Self::Neg => ((), 5),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::check;
-    use expect_test::expect;
+    use super::*;
 
     #[test]
-    fn parse_number() {
-        check(
-            "123",
-            expect![[r#"
-Root@0..3
-  Number@0..3 "123""#]],
-        );
+    fn simple_binary() {
+        check("1 + 2", 
+              Expr::Binary(Box::new(Expr::Literal(Literal::NUMBER(1.0))), 
+                           InfixOp::Add, 
+                           Box::new(Expr::Literal(Literal::NUMBER(2.0)))));  
     }
 
     #[test]
-    fn parse_binding_usage() {
-        check(
-            "counter",
-            expect![[r#"
-Root@0..7
-  Ident@0..7 "counter""#]],
-        );
+    fn simple_compound() {
+        check("1 + 2 - 4", 
+              Expr::Binary(
+                  Box::new(Expr::Binary(
+                      Box::new(Expr::Literal(Literal::NUMBER(1.0))),
+                      InfixOp::Add, 
+                      Box::new(Expr::Literal(Literal::NUMBER(2.0))))),
+                  InfixOp::Sub, 
+                  Box::new(Expr::Literal(Literal::NUMBER(4.0)))));
     }
 
     #[test]
-    fn parse_simple_binary_operation() {
-        check(
-            "1+2",
-            expect![[r#"
-Root@0..3
-  BinOp@0..3
-    Number@0..1 "1"
-    Plus@1..2 "+"
-    Number@2..3 "2""#]],
-        );
+    fn simple_precedence1() {
+        check("1 + 2 * 4", 
+              Expr::Binary(
+                  Box::new(Expr::Literal(Literal::NUMBER(1.0))),
+                  InfixOp::Add, 
+                  Box::new(Expr::Binary(
+                      Box::new(Expr::Literal(Literal::NUMBER(2.0))),
+                      InfixOp::Mul, 
+                      Box::new(Expr::Literal(Literal::NUMBER(4.0)))))));
     }
 
     #[test]
-    fn parse_left_associative_binary_operation() {
-        check(
-            "1+2+3+4",
-            expect![[r#"
-Root@0..7
-  BinOp@0..7
-    BinOp@0..5
-      BinOp@0..3
-        Number@0..1 "1"
-        Plus@1..2 "+"
-        Number@2..3 "2"
-      Plus@3..4 "+"
-      Number@4..5 "3"
-    Plus@5..6 "+"
-    Number@6..7 "4""#]],
-        );
+    fn simple_precedence2() {
+        check("1 * 2 - 4", 
+            Expr::Binary(
+                Box::new(Expr::Binary(
+                    Box::new(Expr::Literal(Literal::NUMBER(1.0))),
+                    InfixOp::Mul,
+                    Box::new(Expr::Literal(Literal::NUMBER(2.0))))),
+                InfixOp::Sub,
+                Box::new(Expr::Literal(Literal::NUMBER(4.0)))));
     }
 
+    // rough ...
     #[test]
-    fn parse_binary_operation_with_mixed_binding_power() {
-        check(
-            "1+2*3-4",
-            expect![[r#"
-Root@0..7
-  BinOp@0..7
-    BinOp@0..5
-      Number@0..1 "1"
-      Plus@1..2 "+"
-      BinOp@2..5
-        Number@2..3 "2"
-        Star@3..4 "*"
-        Number@4..5 "3"
-    Minus@5..6 "-"
-    Number@6..7 "4""#]],
-        );
+    fn simple_grouping() {
+        check("1 * (2 + 2) / 4", 
+              Expr::Binary(
+                  Box::new(Expr::Binary(
+                          Box::new(Expr::Literal(Literal::NUMBER(1.0))),
+                          InfixOp::Mul,
+                          Box::new(Expr::Grouping(
+                                  Box::new(Expr::Binary(
+                                          Box::new(Expr::Literal(Literal::NUMBER(2.0))),
+                                          InfixOp::Add,
+                                          Box::new(Expr::Literal(Literal::NUMBER(2.0))))))))),
+                  InfixOp::Div,
+                  Box::new(Expr::Literal(Literal::NUMBER(4.0)))));
     }
 }

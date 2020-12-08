@@ -8,14 +8,14 @@ fn main() -> io::Result<()> {
     let mut input = String::new();
 
     loop {
-//        write!(stdout, "klug → ")?;
-        write!(stdout, "klug \u{1F449} ")?;
+        write!(stdout, "klug → ")?;
+//        write!(stdout, "klug \u{1F449} ")?;
         stdout.flush()?;
 
         stdin.read_line(&mut input)?;
 
         let parse = Parser::new(&input).parse();
-        println!("{}", parse.debug_tree());
+        println!("{:?}", parse);
 
         input.clear();
     }
