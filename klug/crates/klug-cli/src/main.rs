@@ -1,4 +1,4 @@
-use klug::parser::Parser;
+use klug;
 use std::io::{self, Write};
 
 fn main() -> io::Result<()> {
@@ -14,8 +14,9 @@ fn main() -> io::Result<()> {
 
         stdin.read_line(&mut input)?;
 
-        let parse = Parser::new(&input).parse();
-        println!("{:?}", parse);
+        // let parse = Parser::new(&input).parse();
+        let ret = klug::run(&input);
+        println!("{}", ret);
 
         input.clear();
     }

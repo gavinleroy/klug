@@ -1,10 +1,17 @@
-mod expr;
+pub mod expr;
 
 use expr::Expr;
 use logos::Logos;
 use std::iter::Peekable;
 use crate::lexer::{Lexer, SyntaxKind};
 use crate::syntax::KlugLanguage;
+
+// This trait allows the parser to finish 
+// consuming tokens until it is ccertain 
+// parsing past this error has happened
+trait HasError {
+    fn synchronize(p: &mut Parser);
+}
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
@@ -30,9 +37,8 @@ impl<'a> Parser<'a> {
         self.lexer.peek().map(|(kind, _)| *kind)
     }
 
-    fn next(&mut self) -> &str{
-        let (kind, text) = self.lexer.next().unwrap();
-        text
+    fn next(&mut self) -> (SyntaxKind, &str) {
+        self.lexer.next().unwrap()
     }
 
     fn consume(&mut self) {
@@ -44,11 +50,16 @@ impl<'a> Parser<'a> {
             self.consume();
         }
     }
+
+    fn error_occurred<T>(obj: T) 
+        where T: HasError {
+            todo!();
+    }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Parse {
-    expr: Expr,
+    pub(crate) expr: Expr,
 }
 
 #[cfg(test)]

@@ -9,15 +9,34 @@ pub(crate) enum SyntaxKind {
     FnKw,
     #[token("let")]
     LetKw,
+    #[token("true")]
+    TrueKw,
+    #[token("false")]
+    FalseKw,
     #[regex("[A-Za-z_][A-Za-z0-9_]*")]
     Ident,
     #[regex("[0-9]+")]
     Number,
-    /*
-    * TODO:
-    *   Add additional tokens:  < > <= >= != ==
-    *   And binary ops:         & | 
-    */
+
+    #[token("<=")] // NOTE these aren't incorporated into the expr module yet
+    LessThanEq,
+    #[token(">=")]
+    GreaterThanEq,
+    #[token("<")]
+    LessThan,
+    #[token(">")]
+    GreaterThan,
+    #[token("!=")]
+    NotEqual,
+    #[token("==")]
+    Equal,
+    #[token("&")]
+    BitAnd,
+    #[token("|")]
+    BitOr,
+
+    #[token("!")]
+    Bang,
     #[token("+")]
     Plus,
     #[token("-")]

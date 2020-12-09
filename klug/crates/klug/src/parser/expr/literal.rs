@@ -1,6 +1,9 @@
+use crate::lexer::SyntaxKind;
+
 #[derive(Debug, PartialEq)]
 pub(crate) enum Literal {
     NUMBER(f64),
+    IDENT(String),
     STRING(String),
     TRUE,
     FALSE,
@@ -8,16 +11,23 @@ pub(crate) enum Literal {
 
 // create a new literal from a string
 impl Literal {
-    pub(crate) fn new(s: &str) -> Self {
-        if s == "true" {
-            Self::TRUE
-        } else if s == "false" {
-            Self::FALSE
-        } else if let Ok(num) = s.parse() {
-            Self::NUMBER(num)
-        } else {
-            // default to making it a variable
-            Self::STRING(s.to_string())
+    pub(crate) fn new(sk: SyntaxKind, s: &str) -> Self {
+        match sk {
+            SyntaxKind::TrueKw => Self::TRUE,
+            SyntaxKind::FalseKw => Self::FALSE,
+            SyntaxKind::Ident => Self::IDENT(s.to_string()),
+            SyntaxKind::Number => Self::NUMBER(s.parse::<f64>().unwrap()),
+            _ => todo!(),
+        }
+    }
+
+    pub(super) fn stringify(&self) -> String {
+        match self {
+           Self::NUMBER(n) => n.to_string(),
+           Self::IDENT(s) => (*s).clone(),
+           Self::STRING(s) => (*s).clone(),
+           Self::TRUE => "true".to_string(),
+           Self::FALSE => "false".to_string(),
         }
     }
 }

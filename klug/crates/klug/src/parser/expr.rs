@@ -1,6 +1,7 @@
-mod literal;
-mod op;
+pub(crate) mod literal;
+pub(crate) mod op;
 
+use std::fmt;
 use literal::Literal;
 use op::{InfixOp, PrefixOp};
 use super::Parser;
@@ -12,15 +13,44 @@ pub(crate) enum Expr{
   Binary(Box<Expr>, InfixOp, Box<Expr>),
   Grouping(Box<Expr>),
   Literal(Literal),
+  Error(String),
 }
 
 impl Expr {
     pub(super) fn new(p: &mut Parser) -> Expr {
-        expr_binding_power(p, 0)
+        if let Ok(expr) = expr_binding_power(p, 0) {
+            expr
+        } else {
+            Self::Error("TODO".to_string()) // TODO actually report the error
+        }
+    }
+
+    pub(crate) fn stringify(&self) -> String {
+        match self {
+            Self::Unary(op, bdy) => format!("{}{}", &(op.stringify())[..], &(*bdy.stringify())[..]), 
+            Self::Binary(lhs, op, rhs) => {
+                format!("{} {} {}", &(*lhs.stringify())[..], &(op.stringify())[..], &(*rhs.stringify())[..])
+            }
+            Self::Grouping(bdy) => format!("( {} )", &(*bdy.stringify())[..]), 
+            Self::Literal(lit) => lit.stringify(), 
+            Self::Error(msg) => msg.to_string(),
+        }
     }
 }
 
-fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
+impl super::HasError for Expr {
+    fn synchronize(p: &mut Parser) {
+        // consume input untili we are synchronized on a boundary
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.stringify())
+    }    
+}
+
+fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
 
     let mut poss_expr: Expr;
 
@@ -28,24 +58,37 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
 
     match p.peek() {
         Some(SyntaxKind::Number) 
+//        | Some(SyntaxKind::string)
+        | Some(SyntaxKind::TrueKw)
+        | Some(SyntaxKind::FalseKw)
         | Some(SyntaxKind::Ident) => {
-            poss_expr = Expr::Literal(Literal::new(p.next())); // NOTE: get consumes the char
+            // NOTE: next consumes the token
+            let (sk, txt) = p.next();
+            poss_expr = Expr::Literal(Literal::new(sk, txt)); 
         }
-        Some(SyntaxKind::Minus) => {
-            p.consume();
-            let op = PrefixOp::Neg;
+        Some(SyntaxKind::Minus) 
+        | Some(SyntaxKind::Bang) => {
+            let (kind, _) = p.next();
+            let op = PrefixOp::from_kind(kind);
             let ((), rbind) = op.binding_power();
-            let new_expr = expr_binding_power(p, rbind);
+            let new_expr = expr_binding_power(p, rbind)?;
             poss_expr =  Expr::Unary(op, Box::new(new_expr));
         }
         Some(SyntaxKind::LParen) => {
             p.consume();
-            let new_expr = expr_binding_power(p, 0);
-            assert_eq!(p.peek(), Some(SyntaxKind::RParen));
-            p.consume(); // consume the paren
-            poss_expr =  Expr::Grouping(Box::new(new_expr));
+            let new_expr = expr_binding_power(p, 0)?;
+            if p.peek() != Some(SyntaxKind::RParen) {
+                return Err(Expr::Error("Expected closing ')'".to_string()))
+            } else {
+                p.consume(); // consume the paren
+                poss_expr =  Expr::Grouping(Box::new(new_expr));
+            }
+//            assert_eq!(p.peek(), Some(SyntaxKind::RParen));
         }
-        _ => todo!(), // TODO handle errors
+        _ => {
+            let(_, txt) = p.next();
+            return Err(Expr::Error(format!("Invalid expr token: {}", txt))); // TODO handle errors
+        }
     }
 
     p.consume_whitespace();
@@ -56,18 +99,18 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Expr {
             Some(SyntaxKind::Minus) => InfixOp::Sub,
             Some(SyntaxKind::Star) => InfixOp::Mul,
             Some(SyntaxKind::Slash) => InfixOp::Div,
-            _ => return poss_expr, // If it's not an op, we're done with the expr
+            _ => return Ok(poss_expr), // If it's not an op, we're done with the expr
         };
 
         let (lbind, rbind) = op.binding_power();
 
         // preceding expr takes precedence
         if lbind < min_bind {
-            return poss_expr;
+            return Ok(poss_expr);
         }
 
         p.consume(); // consume the operator token
-        let rhs = expr_binding_power(p, rbind);
+        let rhs = expr_binding_power(p, rbind)?;
         poss_expr = Expr::Binary(Box::new(poss_expr), op, Box::new(rhs));
     }
 }
@@ -85,30 +128,6 @@ mod tests {
     #[test]
     fn parse_bool() {
         check("false", Expr::Literal(Literal::FALSE));
-    }
-
-    #[test]
-    fn literal_string() {
-        let s = "var";
-        assert_eq!(Literal::new(s), Literal::STRING("var".to_string()));
-    }
-
-    #[test]
-    fn literal_num() {
-        let s = "5";
-        assert_eq!(Literal::new(s), Literal::NUMBER(5.0));
-    }
-
-    #[test]
-    fn literal_true() {
-        let s = "true";
-        assert_eq!(Literal::new(s), Literal::TRUE);
-    }
-
-    #[test]
-    fn literal_false() {
-        let s = "false";
-        assert_eq!(Literal::new(s), Literal::FALSE);
     }
 
     #[test]
@@ -170,5 +189,22 @@ mod tests {
                                           Box::new(Expr::Literal(Literal::NUMBER(2.0))))))))),
                   InfixOp::Div,
                   Box::new(Expr::Literal(Literal::NUMBER(4.0)))));
+    }
+
+    #[test]
+    fn unary_expr_minus() {
+        check("-10 + 20", 
+              Expr::Binary(
+                  Box::new(Expr::Unary(PrefixOp::Neg, Box::new(Expr::Literal(Literal::NUMBER(10.0))))),
+                  InfixOp::Add,
+                  Box::new(Expr::Literal(Literal::NUMBER(20.0)))));
+    }
+    #[test]
+    fn unary_expr_bang() {
+        check("!true + false", 
+              Expr::Binary(
+                  Box::new(Expr::Unary(PrefixOp::Not, Box::new(Expr::Literal(Literal::TRUE)))),
+                  InfixOp::Add,
+                  Box::new(Expr::Literal(Literal::FALSE))));
     }
 }
