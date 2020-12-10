@@ -1,6 +1,8 @@
 pub mod expr;
+mod stmt;
 
 use expr::Expr;
+use stmt::Stmt;
 use logos::Logos;
 use std::iter::Peekable;
 use crate::lexer::{Lexer, SyntaxKind};
@@ -10,31 +12,38 @@ use crate::syntax::KlugLanguage;
 // consuming tokens until it is ccertain 
 // parsing past this error has happened
 trait HasError {
-    fn synchronize(p: &mut Parser);
+    fn synchronize(&self, p: &mut Parser);
 }
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
+    has_error: bool,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(s: &'a str) -> Self {
-        Self { lexer: Lexer::new(s).peekable(), }
+        Self { 
+            lexer: Lexer::new(s).peekable(), 
+            has_error: false,
+        }
     }
 
     pub fn parse(mut self) -> Parse {
-        // won't always be an expression.
-        // eventually I should do a match off the first
-        // token and then a FSM from there
-        let new_expr = Expr::new(&mut self);
+        let mut stmts = Vec::<Stmt>::new();
+
+        while !self.is_end() {
+            stmts.push(Stmt::new(&mut self));
+        }
 
         Parse {
-            expr: new_expr,
+            // TODO refactor the code for expr, and what pase returns.
+            expr: Expr::Error("TODO".to_string()),
         }
     }
 
     fn peek(&mut self) -> Option<SyntaxKind> {
-        self.lexer.peek().map(|(kind, _)| *kind)
+        self.lexer.peek()
+            .map(|(kind, _)| *kind)
     }
 
     fn next(&mut self) -> (SyntaxKind, &str) {
@@ -45,15 +54,14 @@ impl<'a> Parser<'a> {
         let _ = self.lexer.next();
     }
 
-    fn consume_whitespace(&mut self) {
-        while self.peek() == Some(SyntaxKind::Whitespace) {
-            self.consume();
-        }
+    fn is_end(&mut self) -> bool {
+        self.peek() == None
     }
 
-    fn error_occurred<T>(obj: T) 
+    fn error_occurred<T>(&mut self, obj: &T) 
         where T: HasError {
-            todo!();
+            // TODO this doesn't feel right
+            obj.synchronize(&mut *self);
     }
 }
 

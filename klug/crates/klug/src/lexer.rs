@@ -3,8 +3,13 @@ use num_derive::{FromPrimitive, ToPrimitive};
 
 #[derive(Debug, Copy, Clone, PartialEq, Logos, FromPrimitive, ToPrimitive)]
 pub(crate) enum SyntaxKind {
-    #[regex(" +")]
+    // NOTE I don't care about whitespace
+    #[regex(r"[ \t\f]+", logos::skip)]
     Whitespace,
+    // NOTE I do care about newlines though :)
+    #[regex(r"\n")]
+    Newline,
+
     #[token("fn")]
     FnKw,
     #[token("let")]
@@ -13,9 +18,9 @@ pub(crate) enum SyntaxKind {
     TrueKw,
     #[token("false")]
     FalseKw,
-    #[regex("[A-Za-z_][A-Za-z0-9_]*")]
+    #[regex(r"[_a-zA-Z][\w]*")]
     Ident,
-    #[regex("[0-9]+")]
+    #[regex(r"[\d]+")]
     Number,
 
     #[token("<=")] // NOTE these aren't incorporated into the expr module yet
@@ -94,7 +99,8 @@ mod tests {
 
     #[test]
     fn lex_spaces() {
-        check("   ", SyntaxKind::Whitespace);
+        let mut lexer = Lexer::new("        ");
+        assert_eq!(lexer.next(), None);
     }
 
     #[test]

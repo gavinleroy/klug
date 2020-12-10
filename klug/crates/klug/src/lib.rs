@@ -3,12 +3,12 @@ mod lexer;
 mod syntax;
 mod interp;
 
-use interp::{interp as finterp, value::Value};
+use interp::{interp_expr, value::Value};
 use parser::Parser;
 
 pub fn run(input: &str) -> String {
     let parse = Parser::new(input).parse();
-    let v = match finterp(parse.expr) {
+    let v = match interp_expr(parse.expr) {
         Ok(Value::Number(n)) => n.to_string(),
         Ok(Value::Bool(b)) => b.to_string(),
         Ok(Value::Str(s)) => s.to_string(),

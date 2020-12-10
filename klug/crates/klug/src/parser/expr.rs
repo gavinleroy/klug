@@ -17,12 +17,13 @@ pub(crate) enum Expr{
 }
 
 impl Expr {
-    pub(super) fn new(p: &mut Parser) -> Expr {
-        if let Ok(expr) = expr_binding_power(p, 0) {
-            expr
-        } else {
-            Self::Error("TODO".to_string()) // TODO actually report the error
-        }
+    pub(super) fn new(p: &mut Parser) -> Self {
+        expr_binding_power(p, 0)
+            .map_or_else(|e|{
+                p.error_occurred(&e);
+                Self::Error("TODO".to_string())
+//                e
+            }, |v| v)
     }
 
     pub(crate) fn stringify(&self) -> String {
@@ -39,8 +40,25 @@ impl Expr {
 }
 
 impl super::HasError for Expr {
-    fn synchronize(p: &mut Parser) {
+    // NOTE: in Klug expressions are newline terminated
+    // this means that to get past the error we eat
+    // all of the input until the newline
+    //
+    // TODO: report the offending line and code that
+    // caused the error.
+    //
+    fn synchronize(&self, p: &mut Parser) {
         // consume input untili we are synchronized on a boundary
+        p.has_error = true;
+        loop {
+            let n = p.peek();
+            match n {
+                Some(SyntaxKind::Newline)
+                | None => break,
+                _ => p.consume(),
+            }
+        }
+        p.consume(); // consume the newline
     }
 }
 
@@ -53,8 +71,6 @@ impl fmt::Display for Expr {
 fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
 
     let mut poss_expr: Expr;
-
-    p.consume_whitespace();
 
     match p.peek() {
         Some(SyntaxKind::Number) 
@@ -77,21 +93,14 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
         Some(SyntaxKind::LParen) => {
             p.consume();
             let new_expr = expr_binding_power(p, 0)?;
-            if p.peek() != Some(SyntaxKind::RParen) {
-                return Err(Expr::Error("Expected closing ')'".to_string()))
-            } else {
-                p.consume(); // consume the paren
-                poss_expr =  Expr::Grouping(Box::new(new_expr));
-            }
-//            assert_eq!(p.peek(), Some(SyntaxKind::RParen));
+            expect(SyntaxKind::RParen, p)?;
+            poss_expr =  Expr::Grouping(Box::new(new_expr));
         }
         _ => {
             let(_, txt) = p.next();
-            return Err(Expr::Error(format!("Invalid expr token: {}", txt))); // TODO handle errors
+            return Err(Expr::Error(format!("expecting expr token, received {}", txt))); 
         }
     }
-
-    p.consume_whitespace();
 
     loop {
         let op = match p.peek() {
@@ -115,10 +124,23 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
     }
 }
 
+fn expect(sk: SyntaxKind, p: &mut Parser) -> Result<(), Expr> {
+    if p.peek() != Some(sk) {
+        return Err(Expr::Error(format!("Expected {:?}", sk)))
+    } else {
+        p.consume();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+fn check(input: &str, to_check: Expr) {
+    let expr = Expr::new(&mut Parser::new(input));
+    assert_eq!(expr, to_check);
+}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::check;
 
     #[test]
     fn parse_num() {
