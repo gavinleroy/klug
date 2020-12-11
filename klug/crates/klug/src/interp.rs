@@ -4,11 +4,13 @@ use std::fmt;
 use num_traits::Float;
 use float_cmp::approx_eq;
 use value::Value;
-use crate::parser::expr::{
+use crate::parser::{
+    stmt::Stmt,
+    expr::{
     Expr,
     literal::Literal,
     op::{InfixOp, PrefixOp}
-};
+}};
 
 #[derive(Debug)]
 pub(crate) struct RuntimeError {
@@ -28,7 +30,7 @@ pub(crate) fn interp_expr(expr: Expr) -> Result<Value, RuntimeError> {
         // terminals
         Expr::Literal(Literal::NUMBER(num)) => Ok(Value::Number(num)),
         Expr::Literal(Literal::IDENT(_)) => todo!(),
-        Expr::Literal(Literal::STRING(_)) => todo!(),
+        Expr::Literal(Literal::STRING(s)) => Ok(Value::Str(s)),
         Expr::Literal(Literal::TRUE) => Ok(Value::Bool(true)),
         Expr::Literal(Literal::FALSE) => Ok(Value::Bool(false)),
 
@@ -46,8 +48,8 @@ pub(crate) fn interp_expr(expr: Expr) -> Result<Value, RuntimeError> {
             let vrhs = interp_expr(*box_rhs)?;
             match (vlhs, vrhs) {
                 (Value::Number(n1), Value::Number(n2)) => num_calc(n1, n2, infop),
-                (Value::Str(s1), Value::Str(_)) => todo!(),
-                (Value::Bool(b1), Value::Bool(_)) => todo!(),
+                (Value::Str(_), Value::Str(_)) => todo!(),
+                (Value::Bool(_), Value::Bool(_)) => todo!(),
                 _ => todo!(),
             }
         }
@@ -55,6 +57,16 @@ pub(crate) fn interp_expr(expr: Expr) -> Result<Value, RuntimeError> {
         Expr::Grouping(box_bdy) => interp_expr(*box_bdy),
 
         _ => unreachable!(), // I'll handle errors later
+    }
+}
+
+// NOTE statements don't (currently) have a return value. 
+// later I might allow 'let' statments return the bound
+// value to allow for chaining.
+pub(crate) fn interp_stmt(stmt: Stmt) -> Result<Value, RuntimeError> {
+    match stmt {
+        Stmt::Expr(expr) => interp_expr(*expr),
+        _ => todo!(),
     }
 }
 

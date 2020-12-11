@@ -74,7 +74,7 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
 
     match p.peek() {
         Some(SyntaxKind::Number) 
-//        | Some(SyntaxKind::string)
+        | Some(SyntaxKind::StringKw)
         | Some(SyntaxKind::TrueKw)
         | Some(SyntaxKind::FalseKw)
         | Some(SyntaxKind::Ident) => {

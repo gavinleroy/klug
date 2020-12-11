@@ -17,7 +17,9 @@ impl Literal {
             SyntaxKind::FalseKw => Self::FALSE,
             SyntaxKind::Ident => Self::IDENT(s.to_string()),
             SyntaxKind::Number => Self::NUMBER(s.parse::<f64>().unwrap()),
-            _ => todo!(),
+            // NOTE strip off the '...' wrapping the string
+            SyntaxKind::StringKw => Self::STRING(s[1..s.len()-1].to_string()),
+            _ => unreachable!(),
         }
     }
 

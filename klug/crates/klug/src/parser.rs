@@ -1,5 +1,5 @@
 pub mod expr;
-mod stmt;
+pub mod stmt;
 
 use expr::Expr;
 use stmt::Stmt;
@@ -9,7 +9,7 @@ use crate::lexer::{Lexer, SyntaxKind};
 use crate::syntax::KlugLanguage;
 
 // This trait allows the parser to finish 
-// consuming tokens until it is ccertain 
+// consuming tokens until it is certain 
 // parsing past this error has happened
 trait HasError {
     fn synchronize(&self, p: &mut Parser);
@@ -35,15 +35,11 @@ impl<'a> Parser<'a> {
             stmts.push(Stmt::new(&mut self));
         }
 
-        Parse {
-            // TODO refactor the code for expr, and what pase returns.
-            expr: Expr::Error("TODO".to_string()),
-        }
+        Parse { stmts: stmts }
     }
 
     fn peek(&mut self) -> Option<SyntaxKind> {
-        self.lexer.peek()
-            .map(|(kind, _)| *kind)
+        self.lexer.peek().map(|(kind, _)| *kind)
     }
 
     fn next(&mut self) -> (SyntaxKind, &str) {
@@ -67,17 +63,11 @@ impl<'a> Parser<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Parse {
-    pub(crate) expr: Expr,
-}
-
-#[cfg(test)]
-fn check(input: &str, expr: Expr) {
-    let parse = Parser::new(input).parse();
-    assert_eq!(parse.expr, expr);
+    pub(crate) stmts: Vec<Stmt>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    // TODO tests maybe?
 }

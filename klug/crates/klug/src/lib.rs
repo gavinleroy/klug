@@ -3,17 +3,20 @@ mod lexer;
 mod syntax;
 mod interp;
 
-use interp::{interp_expr, value::Value};
+use interp::{interp_stmt, value::Value};
 use parser::Parser;
 
 pub fn run(input: &str) -> String {
     let parse = Parser::new(input).parse();
-    let v = match interp_expr(parse.expr) {
-        Ok(Value::Number(n)) => n.to_string(),
-        Ok(Value::Bool(b)) => b.to_string(),
-        Ok(Value::Str(s)) => s.to_string(),
-        Err(runtimeE) => format!("{}", runtimeE),
-    };
+    let mut v = "null".to_string();
+    for stmt in parse.stmts {
+        v = match interp_stmt(stmt) {
+            Ok(Value::Str(s)) => s.to_string(),
+            Ok(Value::Number(n)) => n.to_string(),
+            _ => "TODO".to_string(),
+        };
+        return v;
+    }
     v
 }
 

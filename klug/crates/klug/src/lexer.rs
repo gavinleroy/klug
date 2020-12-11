@@ -22,6 +22,9 @@ pub(crate) enum SyntaxKind {
     Ident,
     #[regex(r"[\d]+")]
     Number,
+    // NOTE strings in Klug are written like this: 'string'
+    #[regex(r"'([^']*)'")]
+    StringKw,
 
     #[token("<=")] // NOTE these aren't incorporated into the expr module yet
     LessThanEq,
@@ -180,5 +183,15 @@ mod tests {
     #[test]
     fn lex_right_parenthesis() {
         check(")", SyntaxKind::RParen);
+    }
+
+    #[test]
+    fn match_string1() {
+        check("'hello world'", SyntaxKind::StringKw);
+    }
+
+    #[test]
+    fn match_string2() {
+        check("'     hello world 0980291212   \n\n\t\t\t\t        '", SyntaxKind::StringKw);
     }
 }
