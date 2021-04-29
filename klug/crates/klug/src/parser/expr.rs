@@ -1,4 +1,3 @@
-pub(crate) mod literal;
 pub(crate) mod op;
 
 use std::fmt;
@@ -39,36 +38,13 @@ impl Expr {
     }
 }
 
-impl super::HasError for Expr {
-    // NOTE: in Klug expressions are newline terminated
-    // this means that to get past the error we eat
-    // all of the input until the newline
-    //
-    // TODO: report the offending line and code that
-    // caused the error.
-    //
-    fn synchronize(&self, p: &mut Parser) {
-        // consume input untili we are synchronized on a boundary
-        p.has_error = true;
-        loop {
-            let n = p.peek();
-            match n {
-                Some(SyntaxKind::Newline)
-                | None => break,
-                _ => p.consume(),
-            }
-        }
-        p.consume(); // consume the newline
-    }
-}
-
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.stringify())
     }    
 }
 
-fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
+fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, ParseError> {
 
     let mut poss_expr: Expr;
 
@@ -93,7 +69,7 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
         Some(SyntaxKind::LParen) => {
             p.consume();
             let new_expr = expr_binding_power(p, 0)?;
-            expect(SyntaxKind::RParen, p)?;
+            p.expect(SyntaxKind::RParen)?;
             poss_expr =  Expr::Grouping(Box::new(new_expr));
         }
         _ => {
@@ -124,14 +100,14 @@ fn expr_binding_power(p: &mut Parser, min_bind: u8) -> Result<Expr, Expr> {
     }
 }
 
-fn expect(sk: SyntaxKind, p: &mut Parser) -> Result<(), Expr> {
-    if p.peek() != Some(sk) {
-        return Err(Expr::Error(format!("Expected {:?}", sk)))
-    } else {
-        p.consume();
-        Ok(())
-    }
-}
+// fn expect(sk: SyntaxKind, p: &mut Parser) -> Result<String, Expr> {
+//     if p.peek() != Some(sk) {
+//         return Err(Expr::Error(format!("Expected {:?}", sk)))
+//     } else {
+//         let (_, txt) = p.next();
+//         Ok(txt)
+//     }
+// }
 
 #[cfg(test)]
 fn check(input: &str, to_check: Expr) {

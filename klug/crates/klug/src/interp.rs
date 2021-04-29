@@ -1,4 +1,4 @@
-pub mod value;
+pub(crate) mod value;
 
 use std::fmt;
 use num_traits::Float;
@@ -6,21 +6,21 @@ use float_cmp::approx_eq;
 use value::Value;
 use crate::parser::{
     stmt::Stmt,
+    literal::Literal,
+    decl::Decl,
     expr::{
     Expr,
-    literal::Literal,
     op::{InfixOp, PrefixOp}
 }};
 
 #[derive(Debug)]
 pub(crate) struct RuntimeError {
-    expr: Expr,
     msg: String,
 }
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "EXPR: {}\nMSG: {}", self.expr.stringify(), self.msg)
+        write!(f, "MSG: {}", self.msg)
     }    
 }
 
@@ -60,12 +60,19 @@ pub(crate) fn interp_expr(expr: Expr) -> Result<Value, RuntimeError> {
     }
 }
 
-// NOTE statements don't (currently) have a return value. 
-// later I might allow 'let' statments return the bound
-// value to allow for chaining.
+// TODO statements don't (currently) have a return value. 
 pub(crate) fn interp_stmt(stmt: Stmt) -> Result<Value, RuntimeError> {
     match stmt {
-        Stmt::Expr(expr) => interp_expr(*expr),
+        Stmt::Expr(bx_expr) => interp_expr(*expr),
+        _ => todo!(),
+    }
+}
+
+// TODO declarations really shouldn't return a Value :)
+pub(crate) fn interp_decl(decl: Decl) -> Result<Value, RuntimeError> {
+    match decl {
+        Decl::Let(ident, opt_expr) => todo!(),
+        Decl::Stmt(bx_stmt) => todo!(),
         _ => todo!(),
     }
 }

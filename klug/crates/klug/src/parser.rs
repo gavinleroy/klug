@@ -1,5 +1,7 @@
 pub mod expr;
 pub mod stmt;
+pub mod decl;
+pub mod literal;
 
 use expr::Expr;
 use stmt::Stmt;
@@ -8,11 +10,15 @@ use std::iter::Peekable;
 use crate::lexer::{Lexer, SyntaxKind};
 use crate::syntax::KlugLanguage;
 
-// This trait allows the parser to finish 
-// consuming tokens until it is certain 
-// parsing past this error has happened
-trait HasError {
-    fn synchronize(&self, p: &mut Parser);
+#[derive(Debug)]
+pub struct ParseError {
+    msg: String,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "MSG: {}", self.msg)
+    }    
 }
 
 pub struct Parser<'a> {
@@ -29,13 +35,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(mut self) -> Parse {
-        let mut stmts = Vec::<Stmt>::new();
+        let mut decls = Vec::<Decl>::new();
 
         while !self.is_end() {
-            stmts.push(Stmt::new(&mut self));
+            decls.push(Decl::new(&mut self));
         }
 
-        Parse { stmts: stmts }
+        Parse { declarations: decls }
     }
 
     fn peek(&mut self) -> Option<SyntaxKind> {
@@ -48,6 +54,28 @@ impl<'a> Parser<'a> {
 
     fn consume(&mut self) {
         let _ = self.lexer.next();
+    }
+
+    fn expect(&mut self, sk: SyntaxKind) -> Result<String, ParseError> {
+        if self.peek() != Some(sk) {
+            return Err(ParseError { 
+                msg: format!("Expected {} but got {}", sk, self.next().map(|(_, txt)| txt)) 
+            })
+        } else {
+            let (_, txt) = self.next();
+            Ok(txt)
+        }
+    }
+
+    fn synchronize(&mut self) {
+        // TODO consume input until we are  on a decl boundary
+        self.has_error = true;
+        loop {
+            match self.peek() {
+                None => break,
+                _ => p.consume(),
+            }
+        }
     }
 
     fn is_end(&mut self) -> bool {
@@ -63,7 +91,7 @@ impl<'a> Parser<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Parse {
-    pub(crate) stmts: Vec<Stmt>,
+    pub(crate) declarations: Vec<Decl>,
 }
 
 #[cfg(test)]
